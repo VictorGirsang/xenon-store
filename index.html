@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xenon Store Pro Max++</title>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Arial}
+body{background:#0f0f0f;color:white}
+
+/* FLASH */
+.flash{
+text-align:center;
+background:#00ffcc;
+color:black;
+padding:6px;
+font-weight:bold;
+}
+
+/* HEADER */
+header{
+display:flex;
+flex-direction:column;
+padding:15px 8%;
+background:#111;
+position:sticky;
+top:0;
+z-index:1000;
+border-bottom:1px solid #00ffcc30;
+}
+.topbar{
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+.logo{
+color:#00ffcc;
+font-weight:bold;
+font-size:20px;
+text-shadow:0 0 8px #00ffcc;
+}
+.stats{font-size:12px;color:#ccc;margin-top:4px}
+.controls{
+margin-top:10px;
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+}
+.controls input,.controls select{
+padding:6px;border-radius:6px;border:none;
+}
+button{
+background:#00ffcc;color:black;border:none;
+padding:6px 10px;border-radius:6px;
+cursor:pointer;font-weight:bold;
+}
+button.red{background:red;color:white}
+
+/* PRODUCTS */
+.products{
+padding:30px 8%;
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+gap:20px;
+}
+.card{
+background:#1a1a1a;
+border-radius:12px;
+overflow:hidden;
+transition:0.3s;
+position:relative;
+}
+.card:hover{
+transform:translateY(-5px);
+box-shadow:0 0 15px #00ffcc;
+}
+.badge{
+position:absolute;
+top:8px;left:8px;
+background:red;
+padding:3px 6px;
+font-size:11px;border-radius:4px;
+}
+.card img{
+width:100%;height:160px;object-fit:cover;
+}
+.card-body{padding:12px}
+.price{color:#00ffcc;margin:6px 0;font-weight:bold}
+.stars span{
+cursor:pointer;color:gray;font-size:14px;
+}
+.stars span.active{color:gold}
+
+/* CART */
+.modal{
+position:fixed;top:0;left:0;
+width:100%;height:100%;
+background:rgba(0,0,0,0.7);
+display:none;justify-content:center;align-items:center;
+}
+.modal-content{
+background:#111;padding:20px;
+width:90%;max-width:400px;border-radius:12px;
+}
+.cart-item{
+display:flex;justify-content:space-between;
+margin-bottom:8px;font-size:14px;
+}
+.total{margin-top:10px;font-weight:bold;color:#00ffcc}
+
+/* LIVE NOTIF */
+.liveNotif{
+position:fixed;bottom:20px;left:20px;
+background:#111;color:white;
+padding:12px 15px;border-radius:10px;
+box-shadow:0 0 15px #00ffcc;
+font-size:13px;
+z-index:999;
+}
+
+/* AUTH */
+.authBox{
+position:fixed;top:0;left:0;
+width:100%;height:100%;
+background:rgba(0,0,0,0.9);
+display:flex;justify-content:center;align-items:center;
+z-index:2000;
+}
+.authContent{
+background:#111;padding:25px;
+border-radius:12px;width:300px;
+}
+.authContent input{
+width:100%;margin-bottom:10px;
+padding:8px;border:none;border-radius:6px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="flash">
+FLASH SALE berakhir dalam: <span id="countdown"></span>
+</div>
+
+<header>
+<div class="topbar">
+<div>
+<div class="logo">Xenon Store</div>
+<div class="stats" id="liveStats"></div>
+<div id="userArea"></div>
+</div>
+<button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
+</div>
+
+<div class="controls">
+<input type="text" id="search" placeholder="Cari produk..." onkeyup="renderProducts()">
+<select id="sort" onchange="renderProducts()">
+<option value="">Urutkan</option>
+<option value="low">Harga Termurah</option>
+<option value="high">Harga Termahal</option>
+<option value="rating">Rating Tertinggi</option>
+</select>
+<button onclick="viewOrders()">Riwayat</button>
+</div>
+</header>
+
+<section class="products" id="products"></section>
+
+<div class="modal" id="cartModal">
+<div class="modal-content">
+<h3>Keranjang</h3>
+<div id="cartItems"></div>
+<div class="total" id="cartTotal"></div>
+<button onclick="checkout()">Checkout</button>
+<button class="red" onclick="closeCart()">Tutup</button>
+</div>
+</div>
+
+<div class="authBox" id="authBox">
+<div class="authContent">
+<h3>Login Xenon Store</h3>
+<input type="text" id="username" placeholder="Username">
+<input type="password" id="password" placeholder="Password">
+<button onclick="login()">Login</button>
+<button onclick="register()">Register</button>
+</div>
+</div>
+
+<script>
+let products=[];
+let cart=JSON.parse(localStorage.getItem("cart"))||[];
+let users=JSON.parse(localStorage.getItem("users"))||[];
+let currentUser=localStorage.getItem("currentUser");
+
+/* GENERATE 50 PRODUK */
+for(let i=1;i<=50;i++){
+products.push({
+id:i,
+name:"Produk "+i,
+price:Math.floor(Math.random()*900000)+100000,
+stock:Math.floor(Math.random()*10)+1,
+rating:0,
+img:"https://picsum.photos/400/300?random="+i
+});
+}
+
+if(currentUser){
+document.getElementById("authBox").style.display="none";
+showUser();
+}
+
+function renderProducts(){
+let container=document.getElementById("products");
+container.innerHTML="";
+let keyword=document.getElementById("search").value.toLowerCase();
+let sort=document.getElementById("sort").value;
+
+let filtered=products.filter(p=>p.name.toLowerCase().includes(keyword));
+
+if(sort==="low") filtered.sort((a,b)=>a.price-b.price);
+if(sort==="high") filtered.sort((a,b)=>b.price-a.price);
+if(sort==="rating") filtered.sort((a,b)=>b.rating-a.rating);
+
+filtered.forEach(p=>{
+container.innerHTML+=`
+<div class="card">
+${p.id<=5?'<div class="badge">Best Seller</div>':''}
+<img src="${p.img}">
+<div class="card-body">
+<h3>${p.name}</h3>
+<div class="price">Rp ${p.price.toLocaleString()}</div>
+<p>Stok: ${p.stock}</p>
+<div class="stars">
+${[1,2,3,4,5].map(s=>
+`<span onclick="rate(${p.id},${s})"
+class="${p.rating>=s?'active':''}">★</span>`
+).join("")}
+</div>
+<button onclick="addToCart(${p.id})" ${p.stock<=0?'disabled':''}>
+${p.stock<=0?'Habis':'Tambah'}
+</button>
+</div>
+</div>`;
+});
+updateCartCount();
+}
+
+function rate(id,val){
+let p=products.find(x=>x.id===id);
+p.rating=val;
+renderProducts();
+}
+
+function addToCart(id){
+let p=products.find(x=>x.id===id);
+if(p.stock<=0)return;
+p.stock--;
+let item=cart.find(i=>i.id===id);
+if(item){item.qty++}
+else{cart.push({id:p.id,name:p.name,price:p.price,qty:1})}
+localStorage.setItem("cart",JSON.stringify(cart));
+renderProducts();
+}
+
+function updateCartCount(){
+document.getElementById("cartCount").innerText=
+cart.reduce((a,b)=>a+b.qty,0);
+}
+
+function openCart(){
+document.getElementById("cartModal").style.display="flex";
+renderCart();
+}
+
+function closeCart(){
+document.getElementById("cartModal").style.display="none";
+}
+
+function renderCart(){
+let container=document.getElementById("cartItems");
+container.innerHTML="";
+let total=0;
+cart.forEach(item=>{
+total+=item.price*item.qty;
+container.innerHTML+=`
+<div class="cart-item">
+<span>${item.name} x${item.qty}</span>
+<span>Rp ${(item.price*item.qty).toLocaleString()}</span>
+</div>`;
+});
+document.getElementById("cartTotal").innerText=
+"Total: Rp "+total.toLocaleString();
+}
+
+function checkout(){
+if(!currentUser){alert("Login dulu!");return;}
+let userIndex=users.findIndex(u=>u.username===currentUser);
+users[userIndex].orders=users[userIndex].orders||[];
+users[userIndex].orders.push(cart);
+localStorage.setItem("users",JSON.stringify(users));
+alert("Checkout berhasil!");
+cart=[];
+localStorage.removeItem("cart");
+closeCart();
+renderProducts();
+}
+
+function viewOrders(){
+if(!currentUser){alert("Login dulu!");return;}
+let user=users.find(u=>u.username===currentUser);
+alert("Total Pesanan: "+(user.orders?user.orders.length:0));
+}
+
+function login(){
+let u=document.getElementById("username").value;
+let p=document.getElementById("password").value;
+let found=users.find(x=>x.username===u && x.password===p);
+if(found){
+localStorage.setItem("currentUser",u);
+location.reload();
+}else alert("User tidak ditemukan!");
+}
+
+function register(){
+let u=document.getElementById("username").value;
+let p=document.getElementById("password").value;
+if(users.find(x=>x.username===u)){
+alert("Username sudah ada!");return;
+}
+users.push({username:u,password:p,orders:[]});
+localStorage.setItem("users",JSON.stringify(users));
+alert("Register berhasil!");
+}
+
+function showUser(){
+document.getElementById("userArea").innerHTML=
+`Login sebagai: ${currentUser} 
+<button onclick="logout()" class="red">Logout</button>`;
+}
+
+function logout(){
+localStorage.removeItem("currentUser");
+location.reload();
+}
+
+function updateLiveStats(){
+let online=Math.floor(Math.random()*40)+80;
+let visit=Math.floor(Math.random()*500)+1000;
+let time=new Date().toLocaleTimeString();
+document.getElementById("liveStats").innerText=
+"Online: "+online+" | Pengunjung: "+visit+" | "+time;
+}
+setInterval(updateLiveStats,1000);
+
+let endTime=new Date().getTime()+3600000;
+setInterval(()=>{
+let now=new Date().getTime();
+let dist=endTime-now;
+let h=Math.floor((dist%(1000*60*60*24))/(1000*60*60));
+let m=Math.floor((dist%(1000*60*60))/(1000*60));
+let s=Math.floor((dist%(1000*60))/1000);
+document.getElementById("countdown").innerText=
+h+"h "+m+"m "+s+"s";
+},1000);
+
+renderProducts();
+updateLiveStats();
+</script>
+
+</body>
+</html>
